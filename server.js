@@ -55,16 +55,16 @@ app.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // পাসওয়ার্ড হ্যাশ করো
+    // Hashing Password
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // নতুন ইউজার তৈরি করো
+    // Creating New User
     const newUser = new User({
       username,
       password: hashedPassword,
     });
 
-    // ডাটাবেজে সেভ করো
+    // Save in Database
     await newUser.save();
 
     res.status(201).json(newUser);
@@ -77,21 +77,21 @@ app.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // ইউজার খোঁজো ডাটাবেজে
+    // Find user in Database
     const user = await User.findOne({ username });
 
     if (!user) {
-      return res.status(404).json({ message: "⚠️ ইউজার পাওয়া যায়নি" });
+      return res.status(404).json({ message: "User is not found" });
     }
 
-    // পাসওয়ার্ড যাচাই করো
+    // Cheaking Password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: "❌ পাসওয়ার্ড ভুল" });
+      return res.status(401).json({ message: "Wrong Password" });
     }
 
-    res.status(200).json({ message: "✅ লগইন সফল", user });
+    res.status(200).json({ message: "Login Successfull", user });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
