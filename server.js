@@ -138,7 +138,9 @@ passport.use(
 
 app.use(passport.initialize());
 
-app.get("/profile",passport.authenticate("jwt", { session: false }),
+app.get(
+  "/profile",
+  passport.authenticate("jwt", { session: false }),
   (req, res) => {
     res.status(200).json({
       message: "✅ Token is verified",
