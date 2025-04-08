@@ -1,8 +1,12 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
-PORT = 4000;
-MONGO_URL = "mongodb://localhost:27017/pasportJWBDB";
+const jwt = require("jsonwebtoken");
+const passport = require("passport");
+
+const secretKey = "your-very-secret-key"; // Secrate key
+const PORT = 4000;
+const MONGO_URL = "mongodb://localhost:27017/pasportJWBDB";
 const saltRounds = 10;
 const app = express();
 
@@ -47,7 +51,8 @@ app.get("/", (req, res) => {
 
 // All users
 app.get("/users", async (req, res) => {
-  const users = await User.find();
+  const users = await User.find().select("-password");
+
   res.send(users);
 });
 
@@ -55,16 +60,16 @@ app.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // পাসওয়ার্ড হ্যাশ করো
+    // Hashing Password
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // নতুন ইউজার তৈরি করো
+    // Creating New User
     const newUser = new User({
       username,
       password: hashedPassword,
     });
 
-    // ডাটাবেজে সেভ করো
+    // Save in Database
     await newUser.save();
 
     res.status(201).json(newUser);
@@ -73,30 +78,74 @@ app.post("/register", async (req, res) => {
   }
 });
 
+// Login and generate token
 app.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // ইউজার খোঁজো ডাটাবেজে
+    // Find user in Database
     const user = await User.findOne({ username });
 
     if (!user) {
-      return res.status(404).json({ message: "⚠️ ইউজার পাওয়া যায়নি" });
+      return res.status(404).json({ message: "User is not found" });
     }
 
-    // পাসওয়ার্ড যাচাই করো
+    // Cheaking Password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: "❌ পাসওয়ার্ড ভুল" });
+      return res.status(401).json({ message: "Wrong Password" });
     }
 
-    res.status(200).json({ message: "✅ লগইন সফল", user });
+    // Data (Payload)
+    const payload = {
+      id: user._id,
+      username: user.username,
+    };
+
+    //Token Generate
+    const token = jwt.sign(payload, secretKey, { expiresIn: "1h" });
+
+    res
+      .status(200)
+      .json({ message: "Login Successfull", token: "Bearer " + token, user });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Middleware to verify token
+const { Strategy: JwtStrategy, ExtractJwt } = require("passport-jwt");
+
+const opts = {
+  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+  secretOrKey: secretKey,
+};
+
+passport.use(
+  new JwtStrategy(opts, async (jwt_payload, done) => {
+    try {
+      const user = await User.findById(jwt_payload.id);
+      if (user) {
+        return done(null, user);
+      }
+      return done(null, false);
+    } catch (err) {
+      return done(err, false);
+    }
+  })
+);
+
+app.use(passport.initialize());
+
+app.get("/profile",passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    res.status(200).json({
+      message: "✅ Token is verified",
+      user: req.user,
+    });
+  }
+);
 
 //Resource not found
 app.use((req, res, next) => {
